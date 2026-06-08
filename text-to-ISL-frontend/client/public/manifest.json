@@ -1,0 +1,15 @@
+{
+  "short_name": "SignAI",
+  "name": "SignAI",
+  "icons": [
+    {
+      "src": "signai-mark.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#1e0257",
+  "background_color": "#0f1020"
+}
