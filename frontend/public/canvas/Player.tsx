@@ -2,12 +2,11 @@
 import {
   OrbitControls,
   PerspectiveCamera,
-  RandomizedLight,
   useAnimations,
   useFBX,
   useGLTF,
 } from "@react-three/drei";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import * as THREE from "three";
 import { Canvas } from "@react-three/fiber";
 
@@ -20,41 +19,65 @@ interface PlayerProps {
 
 function Player({ isMobile }: PlayerProps) {
   const group = useRef<THREE.Group>(null);
-  const [animationsLoaded, setAnimationsLoaded] = useState(false);
 
   const { nodes, materials, scene } = useGLTF("/models/player/player.gltf");
-  const { animations: waveAnimation } = useFBX(
-    "/animations/standing-greeting.fbx"
-  );
-  scene.frustumCulled = false;
+  const waveFBX = useFBX("/animations/standing-greeting.fbx");
+  
+  // Safely extract and rename the animation clip
+  const waveAnimation = waveFBX ? waveFBX.animations : [];
+  if (waveAnimation && waveAnimation.length > 0) {
+    waveAnimation[0].name = "wave-animation";
+  }
 
-  waveAnimation[0].name = "wave-animation";
+  // Ensure meshes do not get clipped out of view
+  if (scene) {
+    scene.frustumCulled = false;
+  }
+
+  // Fix PBR metalness issue where skin, face, and clothing render black due to environment map reflections
+  useEffect(() => {
+    if (materials) {
+      Object.keys(materials).forEach((key) => {
+        const material = materials[key] as any;
+        if (material) {
+          // Zero-out metalness so PBR materials do not reflect black empty backgrounds
+          material.metalness = 0.0;
+          
+          // Set skin/body/clothing roughness for soft diffuse rendering under lighting
+          if (key.toLowerCase().includes("skin") || key.toLowerCase().includes("head") || key.toLowerCase().includes("body")) {
+            material.roughness = 0.85;
+          } else {
+            material.roughness = 0.7;
+          }
+          
+          // Update material flags
+          material.needsUpdate = true;
+        }
+      });
+    }
+  }, [materials]);
 
   const { actions } = useAnimations(waveAnimation, group);
 
+  // Play animation cleanly when loaded
   useEffect(() => {
-    if (waveAnimation && actions["wave-animation"]) {
-      setAnimationsLoaded(true);
+    if (actions && actions["wave-animation"]) {
+      actions["wave-animation"].reset().fadeIn(0.5).play();
     }
-    if (animationsLoaded) {
-      actions["wave-animation"]?.reset().play();
-    }
-  }, [animationsLoaded, waveAnimation, actions]);
-
-  // Using useEffect instead of setTimeout for cleaner code
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (waveAnimation && actions["wave-animation"]) {
-        setAnimationsLoaded(true);
+    return () => {
+      if (actions && actions["wave-animation"]) {
+        actions["wave-animation"].fadeOut(0.5);
       }
-    }, 2000);
-
-    return () => clearTimeout(timer); // Cleanup timeout
-  }, [waveAnimation, actions]);
+    };
+  }, [actions]);
 
   return (
     <>
-      <ambientLight intensity={1} />
+      <ambientLight intensity={2.5} />
+      <hemisphereLight intensity={1.8} color="#ffffff" groundColor="#4b42a7" />
+      <directionalLight position={[0, 2, 10]} intensity={4.0} />
+      <directionalLight position={[5, 5, 2]} intensity={2.0} />
+      <directionalLight position={[-5, 5, 2]} intensity={2.0} />
       <PerspectiveCamera
         makeDefault
         position={[0, 0, 12]}
@@ -63,10 +86,9 @@ function Player({ isMobile }: PlayerProps) {
         far={120}
         zoom={1.4}
       />
-      <RandomizedLight position={[0, 1, 0]} />
-      <pointLight intensity={2} position={[1, 1.5, 0]} color={"#804dee"} />
-      <pointLight intensity={2} position={[-1, 1.5, 1]} color={"#4b42a7"} />
-      <pointLight intensity={2} position={[-1, 0.5, 1]} color={"#804dee"} />
+      <pointLight intensity={5} position={[3, 3, 3]} color={"#804dee"} decay={0} />
+      <pointLight intensity={5} position={[-3, 3, 3]} color={"#4b42a7"} decay={0} />
+      <pointLight intensity={5} position={[0, -2, 5]} color={"#804dee"} decay={0} />
       {!isMobile && (
         <OrbitControls
           makeDefault
@@ -81,12 +103,12 @@ function Player({ isMobile }: PlayerProps) {
       )}
       <Suspense fallback={<CanvasLoader />}>
         <PlayerModel
-          nodes={nodes}
-          materials={materials}
+          nodes={nodes as any}
+          materials={materials as any}
           rotation={[-1.6, 0, 0]}
           position={isMobile ? [0, -2.7, 0] : [0, -2.1, 0]}
           scale={isMobile ? 3 : 2}
-          group={group}
+          group={group as any}
         />
       </Suspense>
     </>
