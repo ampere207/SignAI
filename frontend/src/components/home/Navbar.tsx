@@ -10,9 +10,6 @@ import { getApiBaseUrl } from "@/app/lib/api";
 // Updated navigation links to match the image
 const navLinks = [
   { id: "translate", title: "Translate", href: "/translate" },
-  { id: "e-learning", title: "e-Learning", href: "/e-learning" },
-  { id: "kiosk", title: "Kiosk", href: "https://good-suits-sniff.loca.lt/app" },
-  { id: "videoCall", title: "Video Call", href: "https://comforting-choux-7538b6.netlify.app/app" },
   { id: "contribute", title: "Contribute", href: "/contribute" },
 ];
 

@@ -1,13 +1,24 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse, FileResponse
 import pickle
 import os
 import cv2
 import numpy as np
+
+# Suppress noisy MediaPipe C++ logging / warnings
+os.environ['GLOG_minloglevel'] = '2'
+
 import mediapipe as mp
 from io import BytesIO
 from PIL import Image
 import logging
+from datetime import datetime
+
+# Import modular services
+from services.gemini_service import correct_isl_grammar, generate_conversation_summary
+from services.translation_service import translate_to_kannada
+from services.tts_service import generate_kannada_audio
+from services.pdf_service import generate_session_pdf
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -246,4 +257,86 @@ async def health_check():
         "model_path": MODEL_PATH,
         "model_exists": os.path.exists(MODEL_PATH) if MODEL_PATH else False
     })
+
+@router.post("/correct-grammar")
+async def correct_grammar_endpoint(payload: dict):
+    """Correct raw sign language text using Gemini"""
+    try:
+        raw_text = payload.get("raw_text", "")
+        corrected = correct_isl_grammar(raw_text)
+        return {"raw_text": raw_text, "corrected_text": corrected}
+    except Exception as e:
+        logger.error(f"Error in grammar correction route: {e}")
+        return {"raw_text": payload.get("raw_text", ""), "corrected_text": payload.get("raw_text", "")}
+
+@router.post("/translate-kannada")
+async def translate_kannada_endpoint(payload: dict):
+    """Translate text to Kannada using Gemini"""
+    try:
+        text = payload.get("text", "")
+        translated = translate_to_kannada(text)
+        return {"text": text, "translated_text": translated}
+    except Exception as e:
+        logger.error(f"Error in Kannada translation route: {e}")
+        return {"text": payload.get("text", ""), "translated_text": ""}
+
+@router.get("/tts")
+async def tts_endpoint(text: str):
+    """Generate audio files for Kannada text using gTTS and return as file"""
+    try:
+        if not text or not text.strip():
+            raise HTTPException(status_code=400, detail="Text parameter is required")
+        
+        file_path = generate_kannada_audio(text)
+        return FileResponse(
+            file_path,
+            media_type="audio/mpeg",
+            filename=os.path.basename(file_path)
+        )
+    except Exception as e:
+        logger.error(f"Error in TTS route: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate TTS: {str(e)}")
+
+@router.post("/export-pdf")
+async def export_pdf_endpoint(payload: dict):
+    """Export conversation session as a beautifully styled PDF report"""
+    try:
+        chat_history = payload.get("chat_history", [])
+        session_id = payload.get("session_id", "SESSION-" + datetime.now().strftime("%Y%m%d%H%M%S"))
+        
+        # Build prompt input conversation
+        conversation_lines = []
+        for entry in chat_history:
+            speaker = str(entry.get("speaker", "deaf")).upper()
+            raw = entry.get("raw_text") or entry.get("rawText") or ""
+            corrected = entry.get("corrected_text") or entry.get("correctedText") or ""
+            kannada = entry.get("kannada_text") or entry.get("kannadaText") or entry.get("translated_text") or entry.get("translatedText") or ""
+            timestamp = entry.get("timestamp") or entry.get("time") or ""
+            
+            line = f"[{timestamp}] {speaker}:"
+            if raw:
+                line += f"\n  Raw: {raw}"
+            if corrected:
+                line += f"\n  Corrected: {corrected}"
+            if kannada:
+                line += f"\n  Kannada: {kannada}"
+            conversation_lines.append(line)
+            
+        conversation_text = "\n\n".join(conversation_lines)
+        
+        # Generate summary using Gemini
+        summary = ""
+        if conversation_text.strip():
+            summary = generate_conversation_summary(conversation_text)
+            
+        pdf_bytes = generate_session_pdf(chat_history, session_id, summary)
+        
+        return StreamingResponse(
+            BytesIO(pdf_bytes),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f"attachment; filename=signai_session_{session_id}.pdf"}
+        )
+    except Exception as e:
+        logger.error(f"Error exporting PDF: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to export PDF: {str(e)}")
 

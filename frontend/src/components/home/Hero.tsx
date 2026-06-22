@@ -16,7 +16,7 @@ function Hero({ isMobile }: HeroProps) {
       <div className={`${styles.paddingX} mt-4 absolute inset-0 top-[120px] max-w-7xl mx-auto flex md:flex-row flex-col items-start gap-5`}>
 
         {/* Left side: Text content */}
-        <div className="md:w-1/2 w-full flex flex-row items-start gap-5">
+        <div className="md:w-1/2 w-full flex flex-row items-start gap-5 z-30">
           <motion.div
             variants={textVariant()}
             initial="hidden"
@@ -53,15 +53,6 @@ function Hero({ isMobile }: HeroProps) {
               viewport={{ once: true, amount: 0.25 }}
               className="mt-8 flex flex-wrap gap-4"
             >
-              <Link href="/e-learning" className="btn">
-                <button className="bg-purple-600 hover:bg-purple-700 text-white py-3 px-8 rounded-xl outline-none w-fit font-bold shadow-md shadow-purple-700/50 hover:shadow-purple-500/70 transition-all duration-300 ease-in flex items-center gap-2">
-                  Start Learning
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" className="ml-1">
-                    <path fillRule="evenodd" d="M8 3.5a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-.5.5H4a.5.5 0 0 1 0-1h3.5V4a.5.5 0 0 1 .5-.5z" />
-                    <path fillRule="evenodd" d="M7.646 4.146a.5.5 0 0 1 .708 0l3 3a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708-.708L10.293 8 7.646 5.354a.5.5 0 0 1 0-.708z" />
-                  </svg>
-                </button>
-              </Link>
 
               <Link href="/translate">
                 <button className="border-2 border-purple-500/50 hover:border-purple-500 text-white py-3 px-8 rounded-xl outline-none w-fit font-bold hover:bg-purple-500/10 transition-all duration-300 ease-in">
