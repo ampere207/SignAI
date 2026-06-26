@@ -18,26 +18,66 @@ interface ChatMessage {
 }
 
 const gestureToKannada: Record<string, string> = {
+  "College": "ಕಾಲೇಜು",
+  "Doctor": "ವೈದ್ಯರು",
+  "Food": "ಆಹಾರ",
+  "Friend": "ಸ್ನೇಹಿತ",
+  "Go": "ಹೋಗು",
+  "Good Morning": "ಶುಭೋದಯ",
+  "Good Night": "ಶುಭ ರಾತ್ರಿ",
   "Good": "ಒಳ್ಳೆಯದು",
-  "Morning": "ಮುಂಜಾನೆ",
-  "Head": "ತಲೆ",
-  "Headaches": "ತಲೆನೋವು",
-  "And": "ಮತ್ತು",
-  "Dizziness": "ತಲೆತಿರುಗುವಿಕೆ",
-  "Two": "ಎರಡು",
-  "Days": "ದಿನಗಳು",
-  "Medium": "ಮಧ್ಯಮ",
-  "Sounds": "ಶಬ್ದಗಳು",
+  "Happy": "ಸಂತೋಷ",
+  "He": "ಅವನು",
+  "Hello": "ಹಲೋ",
+  "Help": "ಸಹಾಯ",
+  "Home": "ಮನೆ",
+  "Hospital": "ಆಸ್ಪತ್ರೆ",
+  "I": "ನಾನು",
+  "Namaste": "ನಮಸ್ತೆ",
   "No": "ಇಲ್ಲ",
-  "Light": "ಬೆಳಕು",
-  "Yes": "ಹೌದು",
-  "Too Much": "ತುಂಬಾ ಜಾಸ್ತಿ",
-  "Work": "ಕೆಲಸ",
+  "She": "ಅವಳು",
   "Sleep": "ನಿದ್ರೆ",
-  "Okay": "ಸರಿ",
-  "Thank You!": "ಧನ್ಯವಾದಗಳು!",
-  "Severe": "ತೀವ್ರ",
-  "Bearable": "ಭರಿಸಬಹುದಾದ"
+  "Sorry": "ಕ್ಷಮಿಸಿ",
+  "Thank You": "ಧನ್ಯವಾದಗಳು",
+  "Today": "ಇಂದು",
+  "Want": "ಬೇಕು",
+  "Water": "ನೀರು",
+  "Welcome": "ಸ್ವಾಗತ",
+  "What": "ಏನು",
+  "When": "ಯಾವಾಗ",
+  "Who": "ಯಾರು",
+  "Yes": "ಹೌದು",
+  "You": "ನೀನು",
+  "Ache": "ನೋವು",
+  "Bad": "ಕೆಟ್ಟದ್ದು",
+  "Beautiful": "ಸುಂದರ",
+  "Book": "ಪುಸ್ತಕ",
+  "Brother": "ಸಹೋದರ",
+  "Cold": "ಶೀತ",
+  "Come": "ಬಾ",
+  "Deaf": "ಕಿವುಡ",
+  "Eat": "ತಿನ್ನು",
+  "Family": "ಕುಟುಂಬ",
+  "Father": "ತಂದೆ",
+  "Fever": "ಜ್ವರ",
+  "Give": "ಕೊಡು",
+  "Hearing": "ಕೇಳುವಿಕೆ",
+  "How": "ಹೇಗೆ",
+  "Love": "ಪ್ರೀತಿ",
+  "Medicine": "ಔಷಧಿ",
+  "Mother": "ತಾಯಿ",
+  "Name": "ಹೆಸರು",
+  "Please": "ದಯವಿಟ್ಟು",
+  "School": "ಶಾಲೆ",
+  "Sister": "ಸಹೋದರಿ",
+  "Stop": "ನಿಲ್ಲಿಸು",
+  "Teacher": "ಶಿಕ್ಷಕ",
+  "Thankful": "ಕೃತಜ್ಞ",
+  "Time": "ಸಮಯ",
+  "Tomorrow": "ನಾಳೆ",
+  "Understand": "ಅರ್ಥ ಮಾಡಿಕೊ",
+  "Wash": "ತೊಳೆಯಿರಿ",
+  "Where": "ಎಲ್ಲಿ"
 };
 
 const getKannadaBuffer = (englishText: string): string => {
@@ -103,7 +143,7 @@ export default function ISLToTextPage() {
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: { width: 640, height: 480 }
       });
-      
+
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
         setStream(mediaStream);
@@ -130,7 +170,7 @@ export default function ISLToTextPage() {
     const canvas = canvasRef.current;
     const video = videoRef.current;
     const ctx = canvas.getContext('2d');
-    
+
     if (!ctx) return;
 
     canvas.width = video.videoWidth;
@@ -152,7 +192,7 @@ export default function ISLToTextPage() {
 
         if (response.ok) {
           const result = await response.json();
-          if (result.gesture && result.gesture !== 'No gesture detected') {
+          if (result.gesture && result.gesture !== 'No gesture detected' && result.gesture !== 'Buffering...' && (result.confidence || 0) >= 0.70) {
             const newGesture: DetectedGesture = {
               gesture: result.gesture,
               confidence: result.confidence || 0,
@@ -183,9 +223,9 @@ export default function ISLToTextPage() {
 
   useEffect(() => {
     let intervalId: NodeJS.Timeout;
-    
+
     if (isStreaming && !isProcessing) {
-      intervalId = setInterval(captureFrame, 1000); // Capture every second
+      intervalId = setInterval(captureFrame, 100); // Capture frame every 100ms for real-time sliding window
     }
 
     return () => {
@@ -361,12 +401,12 @@ export default function ISLToTextPage() {
   return (
     <main className="relative z-0 w-full min-h-screen bg-gradient-to-b from-[#1e0257] to-[#2a065e]">
       <StarsCanvas />
-      
+
       {/* Header with Nav Controls */}
       <div className="relative z-10 pt-8 pb-4">
         <div className="container mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-4">
-          <Link 
-            href="/" 
+          <Link
+            href="/"
             className="inline-flex items-center text-white hover:text-purple-300 transition-colors duration-300"
           >
             <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -374,27 +414,25 @@ export default function ISLToTextPage() {
             </svg>
             Back to Home
           </Link>
-          
+
           <div className="flex items-center gap-4">
             {/* Language Toggle Control */}
             <div className="bg-black/40 border border-purple-500/20 rounded-lg p-1 flex">
               <button
                 onClick={() => handleLanguageChange("English")}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                  language === "English"
-                    ? "bg-purple-600 text-white shadow"
-                    : "text-gray-300 hover:text-white"
-                }`}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${language === "English"
+                  ? "bg-purple-600 text-white shadow"
+                  : "text-gray-300 hover:text-white"
+                  }`}
               >
                 English
               </button>
               <button
                 onClick={() => handleLanguageChange("Kannada")}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                  language === "Kannada"
-                    ? "bg-purple-600 text-white shadow"
-                    : "text-gray-300 hover:text-white"
-                }`}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${language === "Kannada"
+                  ? "bg-purple-600 text-white shadow"
+                  : "text-gray-300 hover:text-white"
+                  }`}
               >
                 ಕನ್ನಡ (Kannada)
               </button>
@@ -426,7 +464,7 @@ export default function ISLToTextPage() {
       {/* Main Content Layout */}
       <div className="relative z-10 container mx-auto px-4 py-4">
         <div className="grid lg:grid-cols-12 gap-8">
-          
+
           {/* Left Column: Video and Camera (Col Span 5) */}
           <div className="lg:col-span-5 space-y-6">
             <div className="bg-black/30 backdrop-blur-sm rounded-xl p-6 border border-purple-500/20">
@@ -439,7 +477,7 @@ export default function ISLToTextPage() {
                   className="w-full h-80 bg-gray-900 rounded-lg object-cover"
                 />
                 <canvas ref={canvasRef} className="hidden" />
-                
+
                 {!isStreaming && (
                   <div className="absolute inset-0 flex items-center justify-center bg-gray-900/80 rounded-lg">
                     <div className="text-center">
@@ -518,7 +556,7 @@ export default function ISLToTextPage() {
 
           {/* Right Column: Sentence Buffer & Chat History (Col Span 7) */}
           <div className="lg:col-span-7 space-y-6">
-            
+
             {/* Raw Gesture Sentence Buffer */}
             <div className="bg-black/30 backdrop-blur-sm rounded-xl p-6 border border-purple-500/20">
               <h3 className="text-xl font-semibold text-white mb-4">Gesture Sentence Buffer</h3>
@@ -584,11 +622,10 @@ export default function ISLToTextPage() {
                     return (
                       <div
                         key={index}
-                        className={`flex flex-col max-w-[85%] rounded-xl p-4 ${
-                          isDeaf
-                            ? "bg-purple-900/30 border border-purple-500/20 mr-auto align-start"
-                            : "bg-blue-900/30 border border-blue-500/20 ml-auto align-end text-right"
-                        }`}
+                        className={`flex flex-col max-w-[85%] rounded-xl p-4 ${isDeaf
+                          ? "bg-purple-900/30 border border-purple-500/20 mr-auto align-start"
+                          : "bg-blue-900/30 border border-blue-500/20 ml-auto align-end text-right"
+                          }`}
                       >
                         <div className="flex justify-between items-center gap-6 mb-1 text-[11px] text-gray-400">
                           <span className="font-semibold text-purple-300">

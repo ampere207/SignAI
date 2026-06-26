@@ -24,64 +24,103 @@ from services.pdf_service import generate_session_pdf
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Load the pre-trained gesture recognition model
-MODEL_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "models", "model.p")
-
-# Add debugging for model path
-logger.info(f"Looking for model at: {MODEL_PATH}")
-logger.info(f"Model file exists: {os.path.exists(MODEL_PATH)}")
-
-# Also check the current directory structure
-current_dir = os.path.dirname(__file__)
-parent_dir = os.path.dirname(current_dir)
-logger.info(f"Current file directory: {current_dir}")
-logger.info(f"Parent directory: {parent_dir}")
-logger.info(f"Parent directory contents: {os.listdir(parent_dir) if os.path.exists(parent_dir) else 'Not found'}")
-
 try:
-    if os.path.exists(MODEL_PATH):
-        with open(MODEL_PATH, 'rb') as f:
-            model_dict = pickle.load(f)
-            model = model_dict['model']
-            logger.info("Model loaded successfully")
-    else:
-        # Try alternative paths
-        alternative_paths = [
-            os.path.join(os.path.dirname(__file__), "model.p"),
-            os.path.join(os.path.dirname(os.path.dirname(__file__)), "model.p"),
-            os.path.join(os.getcwd(), "model.p"),
-            os.path.join(os.getcwd(), "static", "models", "model.p"),
-            os.path.join(os.getcwd(), "backend", "static", "models", "model.p"),
-        ]
-        
-        model = None
-        for alt_path in alternative_paths:
-            logger.info(f"Trying alternative path: {alt_path}")
-            if os.path.exists(alt_path):
-                try:
-                    with open(alt_path, 'rb') as f:
-                        model_dict = pickle.load(f)
-                        model = model_dict['model']
-                        logger.info(f"Model loaded successfully from: {alt_path}")
-                        MODEL_PATH = alt_path
-                        break
-                except Exception as e:
-                    logger.error(f"Failed to load model from {alt_path}: {e}")
-        
-        if model is None:
-            logger.error(f"Model file not found. Tried paths: {[MODEL_PATH] + alternative_paths}")
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+
+    # Define the PyTorch LSTM network model structure
+    class SignLanguageLSTM(nn.Module):
+        def __init__(self, input_size=84, hidden_size=128, num_layers=2, num_classes=60):
+            super(SignLanguageLSTM, self).__init__()
+            self.hidden_size = hidden_size
+            self.num_layers = num_layers
+            self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True, dropout=0.2 if num_layers > 1 else 0.0)
+            self.fc = nn.Linear(hidden_size, num_classes)
             
-except Exception as e:
-    logger.error(f"Error loading model: {e}")
-    model = None
+        def forward(self, x):
+            # Input shape: [batch, sequence_length, input_size]
+            out, _ = self.lstm(x)
+            # Classification based on output of the last time step
+            out = self.fc(out[:, -1, :])
+            return out
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+
+# Define alternative loading paths for PyTorch and Random Forest models
+BASE_MODELS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "models")
+PT_MODEL_PATH = os.path.join(BASE_MODELS_DIR, "dl_model.pth")
+SCALER_PATH = os.path.join(BASE_MODELS_DIR, "scaler.pickle")
+RF_MODEL_PATH = os.path.join(BASE_MODELS_DIR, "model.p")
 
 # Class labels for sign language gestures - matching your reference code
 labels_dict = {
-    0: 'Good', 1: 'Morning', 2: 'Head', 3: 'Headaches', 4: 'And', 
-    5: 'Dizziness', 6: 'Two', 7: 'Days', 8: 'Medium', 9: 'Sounds', 
-    10: 'No', 11: 'Light', 12: 'Yes', 13: 'Too Much', 14: 'Work', 
-    15: 'Sleep', 16: 'Okay', 17: 'Thank You!', 18: 'Severe', 19: 'Bearable'
+    0: 'College', 1: 'Doctor', 2: 'Food', 3: 'Friend', 4: 'Go', 
+    5: 'Good Morning', 6: 'Good Night', 7: 'Good', 8: 'Happy', 9: 'He', 
+    10: 'Hello', 11: 'Help', 12: 'Home', 13: 'Hospital', 14: 'I', 
+    15: 'Namaste', 16: 'No', 17: 'She', 18: 'Sleep', 19: 'Sorry', 
+    20: 'Thank You', 21: 'Today', 22: 'Want', 23: 'Water', 24: 'Welcome', 
+    25: 'What', 26: 'When', 27: 'Who', 28: 'Yes', 29: 'You'
 }
+
+# Dynamically load labels.json if it is placed in the models directory
+import json
+LABELS_PATH = os.path.join(BASE_MODELS_DIR, "labels.json")
+if os.path.exists(LABELS_PATH):
+    try:
+        with open(LABELS_PATH, 'r') as lf:
+            loaded_labels = json.load(lf)
+            # Convert JSON string keys to integers
+            labels_dict = {int(k): v for k, v in loaded_labels.items()}
+            logger.info(f"Dynamically loaded labels.json with {len(labels_dict)} class mappings")
+    except Exception as lf_err:
+        logger.error(f"Failed to load dynamic labels.json: {lf_err}")
+
+model = None
+model_type = None
+scaler = None
+
+# Attempt to load PyTorch model first
+if TORCH_AVAILABLE and os.path.exists(PT_MODEL_PATH) and os.path.exists(SCALER_PATH):
+    try:
+        logger.info(f"Attempting to load PyTorch model from: {PT_MODEL_PATH}")
+        # Build neural net model matching labels count
+        num_classes = len(labels_dict)
+        model = SignLanguageLSTM(input_size=84, hidden_size=128, num_layers=2, num_classes=num_classes)
+        model.load_state_dict(torch.load(PT_MODEL_PATH, map_location=torch.device('cpu'), weights_only=False))
+        model.eval()
+        
+        with open(SCALER_PATH, 'rb') as sf:
+            scaler = pickle.load(sf)
+            
+        model_type = "pytorch"
+        logger.info("Successfully loaded PyTorch classifier and StandardScaler")
+    except Exception as pt_err:
+        logger.error(f"Failed to load PyTorch model: {pt_err}")
+        model = None
+
+# Fall back to Random Forest model
+if model is None:
+    alternative_rf_paths = [
+        RF_MODEL_PATH,
+        os.path.join(os.path.dirname(__file__), "model.p"),
+        os.path.join(os.path.dirname(os.path.dirname(__file__)), "model.p"),
+        os.path.join(os.getcwd(), "model.p"),
+    ]
+    
+    for alt_path in alternative_rf_paths:
+        if os.path.exists(alt_path):
+            try:
+                logger.info(f"Attempting to load Random Forest from: {alt_path}")
+                with open(alt_path, 'rb') as f:
+                    model_dict = pickle.load(f)
+                    model = model_dict['model']
+                    model_type = "rf"
+                    logger.info("Successfully loaded Random Forest classifier")
+                    break
+            except Exception as rf_err:
+                logger.error(f"Failed to load RF model from {alt_path}: {rf_err}")
 
 router = APIRouter(
     prefix="/video",
@@ -154,15 +193,31 @@ def extract_hand_landmarks(image_rgb):
         logger.error(f"Error in extract_hand_landmarks: {e}")
         return None, []
 
+# Rolling buffer of landmarks for real-time sliding window predictions (Option B)
+SEQUENCE_LENGTH = 10
+landmark_buffer = []
+active_hand_flags = []
+last_request_time = 0.0
+
 @router.post("/predict-gesture")
 async def predict_gesture(frame: UploadFile = File(...)):
-    """Predict gesture from uploaded frame"""
+    """Predict gesture from uploaded frame using rolling sequence buffer (Option B)"""
+    global landmark_buffer, active_hand_flags, last_request_time
+    import time
     try:
         logger.info("Received prediction request")
         
         if not model:
             logger.error("Model not loaded")
             raise HTTPException(status_code=500, detail="Model not loaded")
+        
+        # Reset buffer if there is a gap of > 2.0s between requests (indicates camera restart/tab switch)
+        current_time = time.time()
+        if current_time - last_request_time > 2.0:
+            landmark_buffer = []
+            active_hand_flags = []
+            logger.info("Cleared landmark buffer due to inactivity (>2.0s)")
+        last_request_time = current_time
         
         # Validate file type
         if not frame.content_type.startswith('image/'):
@@ -171,68 +226,237 @@ async def predict_gesture(frame: UploadFile = File(...)):
         
         # Read the uploaded image
         contents = await frame.read()
-        logger.info(f"Read {len(contents)} bytes from uploaded file")
-        
-        # Convert to PIL Image and then to OpenCV format
         image = Image.open(BytesIO(contents))
-        logger.info(f"Image opened successfully: {image.size}, mode: {image.mode}")
-        
-        # Convert to RGB if necessary
         if image.mode != 'RGB':
             image = image.convert('RGB')
         
-        # Convert PIL to numpy array (RGB format for MediaPipe)
         image_rgb = np.array(image)
-        logger.info(f"Image array shape: {image_rgb.shape}")
         
         # Extract hand landmarks
-        logger.info("Extracting hand landmarks...")
         landmarks, landmarks_data = extract_hand_landmarks(image_rgb)
         
-        if landmarks is None or len(landmarks) == 0:
-            logger.info("No valid hand landmarks detected")
+        # Append landmarks and active flag to the rolling sequence buffer
+        if landmarks is not None and len(landmarks) == 84:
+            landmark_buffer.append(landmarks)
+            active_hand_flags.append(True)
+        else:
+            active_hand_flags.append(False)
+            # If hands are not detected in the current frame, carry over the last frame's landmarks
+            # to maintain continuity and prevent gaps. If buffer is empty, pad with zeros.
+            if len(landmark_buffer) > 0:
+                landmark_buffer.append(landmark_buffer[-1])
+            else:
+                landmark_buffer.append([0] * 84)
+                
+        # GHOST FILTER: Reset buffer and return 'No gesture detected' if hands have been missing
+        # for 2 or more consecutive frames. This prevents predicting stale hand positions when hands go out of view.
+        if len(active_hand_flags) >= 2 and active_hand_flags[-2:] == [False, False]:
+            landmark_buffer = []
+            active_hand_flags = []
+            logger.info("Hands out of frame (2 consecutive missing). Resetting landmark buffer.")
             return JSONResponse(content={
                 "gesture": "No gesture detected",
                 "confidence": 0.0,
-                "landmarks": []
+                "landmarks": landmarks_data or []
             })
-        
-        logger.info(f"Extracted {len(landmarks)} landmark features")
-        
-        # Make prediction
+            
+        # Keep buffer length at exactly SEQUENCE_LENGTH frames
+        if len(landmark_buffer) > SEQUENCE_LENGTH:
+            landmark_buffer.pop(0)
+            active_hand_flags.pop(0)
+            
+        # Return buffering message until we have SEQUENCE_LENGTH frames
+        if len(landmark_buffer) < SEQUENCE_LENGTH:
+            logger.info(f"Landmark buffer filling: {len(landmark_buffer)}/{SEQUENCE_LENGTH} frames")
+            return JSONResponse(content={
+                "gesture": "Buffering...",
+                "confidence": 0.0,
+                "landmarks": landmarks_data or []
+            })
+            
+        # If hands are active in fewer than 5 of the 10 frames (~50% of the sequence),
+        # return 'No gesture detected' instead of letting the model guess on static/empty frames.
+        if sum(active_hand_flags) < 5:
+            logger.info(f"Hands inactive in sequence ({sum(active_hand_flags)}/{SEQUENCE_LENGTH} frames). Ignoring prediction.")
+            return JSONResponse(content={
+                "gesture": "No gesture detected",
+                "confidence": 0.0,
+                "landmarks": landmarks_data or []
+            })
+            
+        # Make sequence prediction
         try:
-            prediction = model.predict([np.asarray(landmarks)])
-            predicted_class = int(prediction[0])
-            logger.info(f"Predicted class: {predicted_class}")
+            if model_type == "pytorch":
+                if scaler is None:
+                    raise Exception("Scaler not loaded for PyTorch LSTM classifier")
+                
+                # Transform landmarks using scaler (fit on 2D)
+                # landmark_buffer shape is [30, 84]. Fit scaler, transform it, then reshape to [1, 30, 84]
+                landmarks_scaled = scaler.transform(landmark_buffer)
+                input_tensor = torch.FloatTensor([landmarks_scaled])
+                
+                with torch.no_grad():
+                    prediction_logits = model(input_tensor)
+                    prediction_probs = F.softmax(prediction_logits, dim=1)
+                    predicted_class = torch.argmax(prediction_logits, dim=1).item()
+                    confidence = float(prediction_probs[0][predicted_class].item())
+            else:
+                # Fallback prediction using Random Forest (trained on flattened sequences)
+                flat_landmarks = np.asarray(landmark_buffer).flatten()
+                prediction = model.predict([flat_landmarks])
+                predicted_class = int(prediction[0])
+                
+                try:
+                    probabilities = model.predict_proba([flat_landmarks])
+                    confidence = float(np.max(probabilities))
+                except Exception:
+                    confidence = 1.0
             
-            # Get confidence if available
-            try:
-                probabilities = model.predict_proba([np.asarray(landmarks)])
-                confidence = float(np.max(probabilities))
-                logger.info(f"Confidence: {confidence}")
-            except Exception as conf_e:
-                logger.warning(f"Could not get confidence: {conf_e}")
-                confidence = 1.0
-            
-            # Get gesture label
             gesture_label = labels_dict.get(predicted_class, "Unknown")
-            logger.info(f"Gesture label: {gesture_label}")
+            logger.info(f"LSTM Prediction success. Predicted: {gesture_label} (Class: {predicted_class}, Conf: {confidence:.2f})")
             
             return JSONResponse(content={
                 "gesture": gesture_label,
                 "confidence": confidence,
                 "class_id": predicted_class,
-                "landmarks": landmarks_data
+                "landmarks": landmarks_data or []
             })
             
         except Exception as pred_e:
-            logger.error(f"Prediction error: {pred_e}")
-            raise HTTPException(status_code=500, detail=f"Prediction failed: {str(pred_e)}")
-        
+            logger.error(f"Prediction execution failed: {pred_e}")
+            raise HTTPException(status_code=500, detail=f"Prediction execution failed: {str(pred_e)}")
+            
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Unexpected error in predict_gesture: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@router.post("/predict-gesture-video")
+async def predict_gesture_video(video: UploadFile = File(...)):
+    """Predict gesture sequence from uploaded video clip (Option A)"""
+    import uuid
+    import shutil
+    temp_path = None
+    try:
+        logger.info("Received prediction request from video clip")
+        if not model:
+            logger.error("Model not loaded")
+            raise HTTPException(status_code=500, detail="Model not loaded")
+            
+        # Create temp folder inside workspace static dir if not exists
+        temp_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static", "temp")
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        # Save uploaded video file
+        unique_filename = f"video_{uuid.uuid4().hex}.webm"
+        temp_path = os.path.join(temp_dir, unique_filename)
+        
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(video.file, buffer)
+            
+        # Open video and extract 30 frames
+        cap = cv2.VideoCapture(temp_path)
+        if not cap.isOpened():
+            raise Exception("Failed to open uploaded video stream.")
+            
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if total_frames <= 0:
+            raise Exception("Uploaded video contains no frames.")
+            
+        # Calculate 30 frame indices to sample evenly
+        SEQUENCE_LENGTH = 30
+        if total_frames >= SEQUENCE_LENGTH:
+            sampled_indices = set(np.linspace(0, total_frames - 1, SEQUENCE_LENGTH, dtype=int))
+        else:
+            sampled_indices = set(range(total_frames))
+            
+        sequence_landmarks = []
+        last_valid_landmarks = [0] * 84
+        
+        frame_idx = 0
+        saved_count = 0
+        
+        while saved_count < SEQUENCE_LENGTH:
+            ret, frame = cap.read()
+            if not ret:
+                break
+                
+            if frame_idx in sampled_indices and saved_count < SEQUENCE_LENGTH:
+                # Convert frame to RGB for MediaPipe
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                landmarks_data, _ = extract_hand_landmarks(frame_rgb)
+                
+                if landmarks_data is not None:
+                    last_valid_landmarks = landmarks_data
+                    sequence_landmarks.append(landmarks_data)
+                else:
+                    # Hand not detected, fall back to last valid frame landmarks
+                    sequence_landmarks.append(last_valid_landmarks)
+                saved_count += 1
+            frame_idx += 1
+            
+        cap.release()
+        
+        # Pad sequence if total frames read was less than SEQUENCE_LENGTH
+        while len(sequence_landmarks) < SEQUENCE_LENGTH:
+            sequence_landmarks.append(last_valid_landmarks)
+            
+        # Clean up temp file immediately
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception as rm_e:
+                logger.warning(f"Failed to delete temp video file {temp_path}: {rm_e}")
+            
+        # Now run LSTM model prediction
+        try:
+            if model_type == "pytorch":
+                if scaler is None:
+                    raise Exception("Scaler not loaded for PyTorch LSTM classifier")
+                
+                # Transform landmarks using scaler fit on 2D
+                # Reshape sequence_landmarks [30, 84] to 2D for transform, then back to [1, 30, 84]
+                sequence_landmarks_scaled_2d = scaler.transform(sequence_landmarks)
+                input_tensor = torch.FloatTensor([sequence_landmarks_scaled_2d])
+                
+                with torch.no_grad():
+                    prediction_logits = model(input_tensor)
+                    prediction_probs = F.softmax(prediction_logits, dim=1)
+                    predicted_class = torch.argmax(prediction_logits, dim=1).item()
+                    confidence = float(prediction_probs[0][predicted_class].item())
+            else:
+                # Fallback prediction using Random Forest (trained on flattened sequences)
+                flat_landmarks = np.asarray(sequence_landmarks).flatten()
+                prediction = model.predict([flat_landmarks])
+                predicted_class = int(prediction[0])
+                
+                try:
+                    probabilities = model.predict_proba([flat_landmarks])
+                    confidence = float(np.max(probabilities))
+                except Exception:
+                    confidence = 1.0
+                    
+            gesture_label = labels_dict.get(predicted_class, "Unknown")
+            logger.info(f"LSTM Prediction success. Predicted: {gesture_label} (Class: {predicted_class}, Conf: {confidence:.2f})")
+            
+            return JSONResponse(content={
+                "gesture": gesture_label,
+                "confidence": confidence,
+                "class_id": predicted_class
+            })
+            
+        except Exception as pred_e:
+            logger.error(f"Prediction execution failed: {pred_e}")
+            raise HTTPException(status_code=500, detail=f"Prediction execution failed: {str(pred_e)}")
+            
+    except Exception as e:
+        logger.error(f"Error in predict_gesture_video: {e}", exc_info=True)
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @router.get("/gestures")

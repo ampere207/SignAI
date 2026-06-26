@@ -1,4 +1,43 @@
-.venv
-/.env
-.env
-.env*
+# Ignore large binaries and archives
+*.jar
+*.zip
+*.tar.gz
+*.tgz
+
+# Ignore installers, executables and library binaries
+**/*.dmg
+**/*.exe
+**/*.AppImage
+**/*.dll
+**/*.jnilib
+**/*.so
+**/*.dylib
+
+# Ignore local virtual environments
+**/venv/
+**/.venv/
+**/env/
+
+# Ignore node modules and build output
+**/node_modules/
+**/.next/
+**/dist/
+**/build/
+
+# OS metadata
+**/.DS_Store
+**/Thumbs.db
+
+# Ignore local machine learning models, dataset pickles and video directories
+**/data/
+**/data.pickle
+**/*.pth
+**/*.pickle
+**/*.pkl
+**/*.h5
+**/model.p
+**/videos/
+**/*.mp4
+**/*.avi
+**/*.mov
+**/*.mkv
