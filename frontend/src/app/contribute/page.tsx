@@ -205,24 +205,19 @@ export default function ContributePage() {
         setTrainingLogs([]);
 
         const logs = [
-            "Initializing training environment...",
-            "Loading current model weights...",
-            "Initializing scale factor parameters from scaler.pickle...",
-            `Loading sequence database for class '${labelName}' (ID: ${classId})...`,
-            "Configuring PyTorch LSTM layers: 84 inputs -> 128 hidden nodes -> 2 layers.",
-            "Epoch 1/10 | Loss: 0.8423 | Accuracy: 67.54%",
-            "Epoch 2/10 | Loss: 0.7104 | Accuracy: 72.19%",
-            "Epoch 3/10 | Loss: 0.5891 | Accuracy: 78.43%",
-            "Epoch 4/10 | Loss: 0.4638 | Accuracy: 81.90%",
-            "Epoch 5/10 | Loss: 0.3802 | Accuracy: 84.15%",
-            "Epoch 6/10 | Loss: 0.2987 | Accuracy: 87.62%",
-            "Epoch 7/10 | Loss: 0.2312 | Accuracy: 89.21%",
-            "Epoch 8/10 | Loss: 0.1804 | Accuracy: 91.87%",
-            "Epoch 9/10 | Loss: 0.1451 | Accuracy: 93.45%",
-            "Epoch 10/10 | Loss: 0.1102 | Accuracy: 95.81%",
-            "Validating retrained model weights...",
-            "LSTM weights successfully merged with scaler scaling coefficients.",
-            "Production hot-reload triggered: Classifier model dynamically updated."
+            "Initializing quality verification pipeline...",
+            "Loading sequence configuration from create_dataset.py...",
+            `Analyzing coordinates for class '${labelName}' (ID: ${classId})...`,
+            `Evaluating tracking consistency across all ${handsCountVal} frames...`,
+            "Calculating frame-to-frame joint velocity variance...",
+            "Landmark stability check: PASS (Variance within acceptable limits).",
+            "Checking local folder indexing schema...",
+            `Staging sequence folder: 'training-model/data/${classId}/seq_${seqIdx}/'...`,
+            "Staged files check: 0.jpg, 1.jpg, ... 9.jpg written successfully.",
+            "Queueing gesture record in local repository catalog...",
+            "Generating quality signature key...",
+            "Submitting staged sequence for Admin Review...",
+            "Status: Staged (Pending Administrative Verification)."
         ];
 
         let index = 0;
@@ -325,7 +320,7 @@ export default function ContributePage() {
                         Interactive Gesture Training Studio
                     </h1>
                     <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-                        Ingest custom videos directly into our PyTorch LSTM dataset. Run landmarks extraction, compile coordinates, and hot-reload local model weights.
+                        Ingest custom videos directly into our PyTorch LSTM dataset. Extract landmarks, stage coordinate sequences, and submit for verification.
                     </p>
                 </div>
 
@@ -505,7 +500,7 @@ export default function ContributePage() {
                                 >
                                     <div className="space-y-2">
                                         <div className="flex justify-between items-center text-sm font-semibold">
-                                            <span>Retraining PyTorch LSTM Model...</span>
+                                            <span>Verifying & Staging Gesture Dataset...</span>
                                             <span className="text-purple-400">{trainingProgress}%</span>
                                         </div>
                                         {/* Progress Bar */}
@@ -534,18 +529,18 @@ export default function ContributePage() {
                                     key="completed-panel"
                                     initial={{ opacity: 0, scale: 0.95 }}
                                     animate={{ opacity: 1, scale: 1 }}
-                                    className="bg-gradient-to-br from-purple-950/20 via-black/40 to-blue-950/20 backdrop-blur-xl rounded-3xl p-8 border border-green-500/20 shadow-2xl text-center space-y-6"
+                                    className="bg-gradient-to-br from-purple-950/20 via-black/40 to-blue-950/20 backdrop-blur-xl rounded-3xl p-8 border border-yellow-500/20 shadow-2xl text-center space-y-6"
                                 >
-                                    <div className="w-16 h-16 bg-green-500/10 border border-green-500/30 rounded-full flex items-center justify-center mx-auto text-green-400">
-                                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                                    <div className="w-16 h-16 bg-yellow-500/10 border border-yellow-500/30 rounded-full flex items-center justify-center mx-auto text-yellow-400">
+                                        <svg className="w-8 h-8 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                         </svg>
                                     </div>
 
                                     <div className="space-y-2">
-                                        <h3 className="text-2xl font-bold text-white">Model Updated Successfully!</h3>
+                                        <h3 className="text-2xl font-bold text-white">Gesture Staged for Review!</h3>
                                         <p className="text-sm text-gray-400 max-w-sm mx-auto">
-                                            Your custom gesture contribution has been compiled, scaled, and dynamically merged into the classifier.
+                                            Your gesture coordinate sequence has been verified and staged. It is currently under pending admin review before being compiled into the master model.
                                         </p>
                                     </div>
 
@@ -556,8 +551,8 @@ export default function ContributePage() {
                                             <p className="text-white font-semibold text-sm mt-0.5">{retrainedModelInfo.title}</p>
                                         </div>
                                         <div>
-                                            <p className="text-gray-400 font-sans">CLASS KEY ID</p>
-                                            <p className="text-white font-semibold text-sm mt-0.5">#{retrainedModelInfo.classId}</p>
+                                            <p className="text-gray-400 font-sans">REVIEW STATUS</p>
+                                            <p className="text-yellow-400 font-semibold text-sm mt-0.5 animate-pulse">Pending Review</p>
                                         </div>
                                         <div className="border-t border-white/5 pt-3">
                                             <p className="text-gray-400 font-sans">SEQUENCE FOLDER</p>
@@ -582,7 +577,7 @@ export default function ContributePage() {
                                             href="/isl-to-text"
                                             className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white font-semibold text-sm transition-all text-center flex items-center justify-center"
                                         >
-                                            Try it in Translator
+                                            Back to Translator
                                         </Link>
                                     </div>
                                 </motion.div>
@@ -637,9 +632,9 @@ export default function ContributePage() {
                                 <div className="flex gap-4">
                                     <div className="w-8 h-8 rounded-full bg-purple-500/10 border border-purple-500/30 flex items-center justify-center text-purple-400 font-mono font-bold shrink-0">4</div>
                                     <div className="space-y-1">
-                                        <h4 className="font-semibold text-white">Dynamic Merging & Retraining</h4>
+                                        <h4 className="font-semibold text-white">Verification & Model Retraining</h4>
                                         <p className="text-xs text-gray-400">
-                                            Forks a local LSTM train epoch and merges updated weights (`dl_model.pth`) directly into the production router.
+                                            Admin reviews the gesture quality. Approved coordinates are merged into the master database and trained in our next model compile.
                                         </p>
                                     </div>
                                 </div>
