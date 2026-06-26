@@ -10,7 +10,7 @@ import { getApiBaseUrl } from "@/app/lib/api";
 // Updated navigation links to match the image
 const navLinks = [
   { id: "translate", title: "Translate", href: "/translate" },
-  { id: "contribute", title: "Contribute", href: "/contribute" },
+  { id: "contribute", title: "Custom Trainer", href: "/contribute" },
 ];
 
 function Navbar() {

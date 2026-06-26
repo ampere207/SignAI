@@ -564,3 +564,187 @@ async def export_pdf_endpoint(payload: dict):
         logger.error(f"Error exporting PDF: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to export PDF: {str(e)}")
 
+
+@router.post("/contribute-gesture")
+async def contribute_gesture_endpoint(
+    label: str,
+    video: UploadFile = File(...)
+):
+    """
+    Accept an uploaded video contribution for custom gesture training, extract frames/landmarks,
+    save the frames to the training dataset directory, and return skeleton coordinates for frontend preview.
+    """
+    import uuid
+    import shutil
+    import json
+    
+    temp_path = None
+    try:
+        logger.info(f"Received contribution for label: '{label}'")
+        
+        # 1. Resolve paths
+        backend_dir = os.path.dirname(os.path.dirname(__file__))
+        training_model_dir = os.path.abspath(os.path.join(backend_dir, "..", "training-model"))
+        training_data_dir = os.path.join(training_model_dir, "data")
+        
+        # Verify training data dir exists
+        os.makedirs(training_data_dir, exist_ok=True)
+        
+        training_labels_path = os.path.join(training_model_dir, "labels.json")
+        backend_labels_path = os.path.join(backend_dir, "static", "models", "labels.json")
+        
+        # 2. Get or create class ID for this label
+        class_id = None
+        global labels_dict
+        
+        # Read labels from training model if exists
+        current_labels = {}
+        if os.path.exists(training_labels_path):
+            try:
+                with open(training_labels_path, 'r') as lf:
+                    current_labels = json.load(lf)
+            except Exception as e:
+                logger.error(f"Failed to read labels file: {e}")
+        
+        # Search for existing label (case-insensitive)
+        for cid, val in current_labels.items():
+            if val.strip().lower() == label.strip().lower():
+                class_id = str(cid)
+                # Keep original case from labels mapping
+                label = val
+                break
+                
+        if class_id is None:
+            # Create a new class ID
+            if current_labels:
+                numeric_keys = [int(k) for k in current_labels.keys() if k.isdigit()]
+                next_id = max(numeric_keys) + 1 if numeric_keys else 0
+            else:
+                next_id = 0
+            class_id = str(next_id)
+            current_labels[class_id] = label
+            
+            # Save labels back to both training-model and backend locations
+            for path in [training_labels_path, backend_labels_path]:
+                try:
+                    os.makedirs(os.path.dirname(path), exist_ok=True)
+                    with open(path, 'w') as lf:
+                        json.dump(current_labels, lf, indent=4)
+                    logger.info(f"Updated labels file at {path} with new label '{label}' (ID: {class_id})")
+                except Exception as lf_e:
+                    logger.error(f"Error saving updated labels to {path}: {lf_e}")
+            
+            # Dynamically update the active in-memory labels dictionary
+            labels_dict[int(class_id)] = label
+            
+        # 3. Create target directory for new sequence
+        class_dir = os.path.join(training_data_dir, class_id)
+        os.makedirs(class_dir, exist_ok=True)
+        
+        # Find next sequence index
+        existing_seqs = [d for d in os.listdir(class_dir) if d.startswith("seq_") and os.path.isdir(os.path.join(class_dir, d))]
+        seq_indices = []
+        for d in existing_seqs:
+            try:
+                seq_indices.append(int(d.split("_")[1]))
+            except ValueError:
+                pass
+        next_seq_idx = max(seq_indices) + 1 if seq_indices else 0
+        new_seq_dir = os.path.join(class_dir, f"seq_{next_seq_idx}")
+        os.makedirs(new_seq_dir, exist_ok=True)
+        
+        # 4. Save uploaded video to temp file
+        temp_dir = os.path.join(backend_dir, "static", "temp")
+        os.makedirs(temp_dir, exist_ok=True)
+        unique_filename = f"contrib_{uuid.uuid4().hex}.webm"
+        temp_path = os.path.join(temp_dir, unique_filename)
+        
+        with open(temp_path, "wb") as buffer:
+            shutil.copyfileobj(video.file, buffer)
+            
+        # 5. Open video stream and sample exactly 10 frames
+        cap = cv2.VideoCapture(temp_path)
+        if not cap.isOpened():
+            raise Exception("Failed to open uploaded video stream.")
+            
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if total_frames <= 0:
+            raise Exception("Uploaded video contains no frames.")
+            
+        SEQUENCE_LENGTH = 10
+        if total_frames >= SEQUENCE_LENGTH:
+            sampled_indices = np.linspace(0, total_frames - 1, SEQUENCE_LENGTH, dtype=int).tolist()
+        else:
+            # Duplicate last index if video is too short
+            sampled_indices = list(range(total_frames))
+            while len(sampled_indices) < SEQUENCE_LENGTH:
+                sampled_indices.append(total_frames - 1)
+                
+        frames_to_save = []
+        frame_idx = 0
+        saved_count = 0
+        
+        while len(frames_to_save) < SEQUENCE_LENGTH:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            if frame_idx in sampled_indices:
+                frames_to_save.append(frame)
+            frame_idx += 1
+            
+        cap.release()
+        
+        # Ensure we have exactly SEQUENCE_LENGTH frames
+        while len(frames_to_save) < SEQUENCE_LENGTH and len(frames_to_save) > 0:
+            frames_to_save.append(frames_to_save[-1])
+            
+        if not frames_to_save:
+            raise Exception("Failed to read frames from video.")
+            
+        # 6. Process frames, extract coordinates for skeleton, and save images
+        skeleton_playback = []  # Contains [ [{x, y, z}, ...], [] ] landmark arrays for each frame
+        hands_detected_count = 0
+        
+        for idx, frame in enumerate(frames_to_save):
+            # Save frame image to the new sequence directory
+            frame_path = os.path.join(new_seq_dir, f"{idx}.jpg")
+            cv2.imwrite(frame_path, frame)
+            
+            # Extract landmarks for skeleton playback representation
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            _, landmarks_data = extract_hand_landmarks(frame_rgb)
+            
+            if landmarks_data:
+                hands_detected_count += 1
+                skeleton_playback.append(landmarks_data)
+            else:
+                # Return empty list if no hand landmarks detected in this frame
+                skeleton_playback.append([])
+                
+        # Clean up temp file
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception as rm_e:
+                logger.warning(f"Failed to delete temp video file {temp_path}: {rm_e}")
+                
+        return JSONResponse(content={
+            "success": True,
+            "message": f"Successfully ingested gesture video. Added sequence 'seq_{next_seq_idx}' under class '{label}' (ID: {class_id}).",
+            "class_id": class_id,
+            "label": label,
+            "sequence_index": next_seq_idx,
+            "total_frames_saved": len(frames_to_save),
+            "hands_detected_frames": hands_detected_count,
+            "skeleton_data": skeleton_playback
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in contribute_gesture_endpoint: {e}", exc_info=True)
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except Exception:
+                pass
+        raise HTTPException(status_code=500, detail=f"Failed to process contributed video: {str(e)}")
+

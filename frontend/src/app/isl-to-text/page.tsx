@@ -192,7 +192,7 @@ export default function ISLToTextPage() {
 
         if (response.ok) {
           const result = await response.json();
-          if (result.gesture && result.gesture !== 'No gesture detected' && result.gesture !== 'Buffering...' && (result.confidence || 0) >= 0.70) {
+          if (result.gesture && result.gesture !== 'No gesture detected' && result.gesture !== 'Buffering...' && (result.confidence || 0) >= 0.85) {
             const newGesture: DetectedGesture = {
               gesture: result.gesture,
               confidence: result.confidence || 0,
